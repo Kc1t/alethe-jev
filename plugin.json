@@ -1,0 +1,36 @@
+{
+  "id": "alethe.jev",
+  "name": "Jev",
+  "version": "1.0.0",
+  "apiVersion": 2,
+  "kind": "ui",
+  "description": "Voice commands for the workspace and Ctrl+E dictation into the focused terminal.",
+  "entry": "main.js",
+  "styles": "styles.css",
+  "capabilities": [
+    "ui.overlay",
+    "ui.settings",
+    "ui.sidebarTab",
+    "workspace.read",
+    "workspace.control",
+    "terminal.write",
+    "invoke:speech_*",
+    "invoke:jev_decide",
+    "listen:speech*"
+  ],
+  "activation": ["onStartupFinished"],
+  "contributes": {
+    "views": [
+      {
+        "id": "jev",
+        "container": "rightSidebar",
+        "title": "Jev",
+        "titleKey": "plugin.alethe.jev.tab",
+        "panelTitleKey": "plugin.alethe.jev.history.title",
+        "icon": "mic",
+        "order": 30
+      }
+    ]
+  },
+  "spec": {}
+}
