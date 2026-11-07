@@ -10,10 +10,12 @@ Jev is the voice plugin for [Alethe](https://github.com/Kc1t/alethe-agents). It 
   on-device model or an audio model on OpenRouter.
 - **History.** A Jev tab in the right sidebar lists every command of the session with what was heard,
   the plan, its cost and what ran.
-- **Settings** in Preferences → Integrations: the decisions API key, voice input, dictation mode,
-  microphone, transcriber and speech model.
+- **Settings** in Preferences → Integrations: whether the OpenRouter key is set, voice input,
+  dictation mode, microphone, transcriber and which downloaded speech model to use.
 
-Speech capture and recognition run in Alethe itself (`speech_*` commands); the plugin drives them.
+Speech capture and recognition run in Alethe itself; the plugin drives them through `context.voice`.
+The OpenRouter key and the speech models live in Alethe's Preferences → Voice, which Jev opens from
+its settings.
 
 It is also the reference for writing an **external** Alethe plugin with a real toolchain: TypeScript,
 React and CSS Modules in its own repository, built by Vite into one script that binds to
@@ -23,7 +25,11 @@ the sha256. The plugin contract is documented in Alethe's
 
 ## Install
 
-Jev needs plugin API 2. Alethe 1.7.0 and older speak API 1, so they do not list it.
+Jev 1.1 needs plugin API 3 with `context.voice` (typed voice API). An API 3 build of Alethe without
+`context.voice` refuses to activate it with an explicit error; Jev 1.0 needs plugin API 2.
+
+Set the OpenRouter key in Preferences → Voice. Voice commands and OpenRouter dictation use that key;
+Jev never sees it. Download or remove on-device speech models in the same place.
 
 From Alethe: Preferences → Plugins → catalogue → **Jev** → Install, then turn it on. The trust dialog
 lists what it asks for:
@@ -36,20 +42,21 @@ lists what it asks for:
 | `workspace.read`    | the projects, terminals and agents a command can refer to    |
 | `workspace.control` | opening, focusing and stopping terminals                     |
 | `terminal.write`    | handing a prompt to a running agent and typing dictated text |
-| `invoke:speech_*`   | microphone capture, models and transcription                 |
+| `voice.listen`      | microphone capture, model status and transcription           |
 | `invoke:jev_decide` | sending the transcript and workspace summary to OpenRouter   |
-| `listen:speech*`    | speech model download progress                               |
 
-Voice settings from the versions of Alethe that had Jev built in, including the decisions key, are
-picked up the first time the plugin runs.
+Reading whether a key is set and opening Preferences → Voice need no capability.
+
+Voice settings from the versions of Alethe that had Jev built in are picked up the first time the
+plugin runs. A decisions key that Jev 1.0 stored is left in its settings file untouched; Alethe moves
+it into the OS keychain and blanks it.
 
 ## Privacy
 
 Spoken audio stays on the machine with the on-device transcriber. With OpenRouter transcription the
 recording is sent to OpenRouter. Every voice command sends the transcript plus the names and folders
-of open projects and terminals to OpenRouter to pick an action. The key is stored in plain text in
-`plugin-data/alethe.jev.json` inside the Alethe profile and never syncs; uninstalling the plugin
-deletes it.
+of open projects and terminals to OpenRouter to pick an action. The OpenRouter key is kept by Alethe
+in the OS keychain; Jev only learns whether one is set.
 
 ## Develop
 

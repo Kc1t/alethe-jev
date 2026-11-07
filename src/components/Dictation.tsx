@@ -2,6 +2,7 @@ import { Loader2, Mic, MicOff } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { host, useT } from '../host'
+import { refreshOpenRouterKey } from '../openRouterKey'
 import { formatShortcut } from '../platform'
 import { useSettings } from '../settings'
 import { speechStartCapture, speechStopCapture, stopAndTranscribe } from '../tauri'
@@ -16,8 +17,7 @@ function isDictationChord(e: KeyboardEvent): boolean {
 
 export function Dictation() {
   const t = useT()
-  const { voiceEnabled, dictationMode, modelId, microphoneId, provider, cloudModel, apiKey } =
-    useSettings()
+  const { voiceEnabled, dictationMode, modelId, microphoneId, provider, cloudModel } = useSettings()
   const [listening, setListening] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -45,12 +45,12 @@ export function Dictation() {
     setBusy(true)
     setError(null)
     try {
-      if (provider === 'openrouter' && !apiKey.trim()) {
+      if (provider === 'openrouter' && !(await refreshOpenRouterKey())) {
         await speechStopCapture()
         setError(t('dictation.missingCloudKey'))
         return
       }
-      const text = await stopAndTranscribe({ provider, modelId, cloudModel, apiKey })
+      const text = await stopAndTranscribe({ provider, modelId, cloudModel })
       if (!text.trim()) {
         setError(t('dictation.emptyTranscript'))
         return
@@ -63,7 +63,7 @@ export function Dictation() {
       busyRef.current = false
       setBusy(false)
     }
-  }, [apiKey, cloudModel, insertTranscript, modelId, provider, t])
+  }, [cloudModel, insertTranscript, modelId, provider, t])
 
   const startCapture = useCallback(async () => {
     if (recordingRef.current || busyRef.current) return

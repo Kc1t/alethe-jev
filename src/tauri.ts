@@ -47,79 +47,30 @@ export type JevContext = {
   focusedTerminal: string | null
 }
 
-export type SpeechModelManifest = {
-  id: string
-  label: string
-  description: string
-  language: string
-  sampleRate: number
-  sizeBytes: number
-  recommended: boolean
-}
-
-export type SpeechModelState = {
-  id: string
-  status: 'not-downloaded' | 'downloading' | 'ready' | 'error' | string
-  progress?: number | null
-  error?: string | null
-}
-
-export type SpeechDownloadProgress = {
-  modelId: string
-  downloaded: number
-  total: number
-  fraction: number
-}
-
-export type SpeechInputDevice = {
-  deviceId: string
-  label: string
-  isDefault: boolean
-}
-
-export type VadStatus = {
-  level: number
-  voice: boolean
-  heardMs: number
-  silenceMs: number
-  segments: number
-}
-
 export type Transcriber = {
   provider: 'local' | 'openrouter'
   modelId: string
   cloudModel: string
-  apiKey: string
 }
 
-const call = <T>(command: string, args?: Record<string, unknown>) => host().invoke<T>(command, args)
+const voice = () => host().voice
 
-export const jevDecide = (spoken: string, context: JevContext, apiKey: string) =>
-  call<JevDecision>('jev_decide', { spoken, context, apiKey, native: false })
+export const jevDecide = (spoken: string, context: JevContext) =>
+  host().invoke<JevDecision>('jev_decide', { spoken, context, native: false })
 
-export const speechListModels = () => call<SpeechModelManifest[]>('speech_list_models')
-export const speechModelStates = () => call<SpeechModelState[]>('speech_model_states')
-export const speechDownloadModel = (modelId: string) =>
-  call<SpeechModelState>('speech_download_model', { modelId })
-export const speechDeleteModel = (modelId: string) => call<void>('speech_delete_model', { modelId })
-export const speechListInputDevices = () => call<SpeechInputDevice[]>('speech_list_input_devices')
+export const speechModelStates = () => voice().modelStates()
+export const speechListInputDevices = () => voice().inputDevices()
 export const speechStartCapture = (deviceId: string | null) =>
-  call<void>('speech_start_capture', { deviceId })
-export const speechCaptureLevel = () => call<number>('speech_capture_level')
-export const speechVadStatus = () => call<VadStatus | null>('speech_vad_status')
-export const speechPrepareVad = () => call<boolean>('speech_prepare_vad')
-export const speechStopCapture = () => call<unknown>('speech_stop_capture')
-export const speechPrepare = (modelId: string) => call<boolean>('speech_prepare', { modelId })
-export const speechTranscribePartial = (modelId: string) =>
-  call<string>('speech_transcribe_partial', { modelId })
+  voice().startCapture(deviceId ?? undefined)
+export const speechCaptureLevel = () => voice().captureLevel()
+export const speechVadStatus = () => voice().vadStatus()
+export const speechPrepareVad = () => voice().prepareVad()
+export const speechStopCapture = () => voice().stopCapture()
+export const speechPrepare = (modelId: string) => voice().prepare({ modelId })
+export const speechTranscribePartial = (modelId: string) => voice().transcribePartial({ modelId })
 
-export function stopAndTranscribe(transcriber: Transcriber): Promise<string> {
-  return transcriber.provider === 'openrouter'
-    ? call<string>('speech_stop_and_transcribe_cloud', {
-        apiKey: transcriber.apiKey,
-        model: transcriber.cloudModel,
-      })
-    : call<string>('speech_stop_and_transcribe', { modelId: transcriber.modelId })
+export function stopAndTranscribe({ provider, modelId, cloudModel }: Transcriber): Promise<string> {
+  if (provider === 'openrouter') return voice().stopAndTranscribe({ provider, modelId: cloudModel })
+  // No provider, so the host still infers apple-speech from the id
+  return voice().stopAndTranscribe({ modelId })
 }
-
-export const SPEECH_DOWNLOAD_EVENT = 'speech://download-progress'

@@ -1,13 +1,13 @@
-import type { SpeechInputDevice } from '../tauri'
+import type { VoiceInputDevice } from '../alethe'
 
 type Props = {
   className?: string
-  devices: SpeechInputDevice[]
+  devices: VoiceInputDevice[]
   value: string | null
   defaultLabel: string
   ariaLabel: string
   disabled?: boolean
-  onChange: (device: SpeechInputDevice | null) => void
+  onChange: (device: VoiceInputDevice | null) => void
 }
 
 export function MicSelect({

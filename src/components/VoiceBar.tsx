@@ -1,16 +1,16 @@
 import { Loader2, Mic, Play, Repeat } from 'lucide-react'
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from 'react'
 
-import type { Translate } from '../alethe'
+import type { Translate, VoiceInputDevice } from '../alethe'
 import { history } from '../history'
 import { host, useT } from '../host'
+import { hasOpenRouterKey, refreshOpenRouterKey, useOpenRouterKey } from '../openRouterKey'
 import { getSettings, updateSettings, useSettings } from '../settings'
 import { createSpeechEndpoint, vadSpeechEnded } from '../speech/endpoint'
 import {
   jevDecide,
   type JevDecision,
   speechCaptureLevel,
-  type SpeechInputDevice,
   speechListInputDevices,
   speechPrepare,
   speechPrepareVad,
@@ -154,14 +154,14 @@ type Held = {
 export function VoiceBar() {
   const t = useT()
   const settings = useSettings()
-  const { apiKey, voiceEnabled, keepListening, modelId, microphoneId, provider, cloudModel } =
-    settings
+  const { voiceEnabled, keepListening, modelId, microphoneId, provider, cloudModel } = settings
+  const hasKey = useOpenRouterKey()
 
   const [open, setOpen] = useState(false)
   const [phase, setPhase] = useState<'idle' | 'listening' | 'transcribing' | 'deciding'>('idle')
   const [message, setMessage] = useState<string | null>(null)
   const [held, setHeld] = useState<Held | null>(null)
-  const [mics, setMics] = useState<SpeechInputDevice[]>([])
+  const [mics, setMics] = useState<VoiceInputDevice[]>([])
   const [levels, setLevels] = useState<number[]>(SILENCE)
   const [micSilent, setMicSilent] = useState(false)
   const [heard, setHeard] = useState('')
@@ -199,7 +199,7 @@ export function VoiceBar() {
   const execute = useCallback(
     async (pending: VoicePlan, workspace: JevWorkspace, entryId: string | null) => {
       const current = getSettings()
-      const continuous = Boolean(current.apiKey) && current.voiceEnabled && current.keepListening
+      const continuous = hasOpenRouterKey() && current.voiceEnabled && current.keepListening
       busyRef.current = true
       if (continuous) {
         resetForNextCommand()
@@ -229,7 +229,7 @@ export function VoiceBar() {
       const startedAt = performance.now()
       const session = sessionRef.current
       const answer = await withTimeout(
-        jevDecide(spoken, toJevContext(workspace), apiKey),
+        jevDecide(spoken, toJevContext(workspace)),
         t('error.timeout'),
       )
       const decideMs = Math.round(performance.now() - startedAt)
@@ -254,7 +254,7 @@ export function VoiceBar() {
       }
       return { answer, next, nextWarnings, entryId, workspace }
     },
-    [apiKey, execute, t],
+    [execute, t],
   )
 
   const listen = useCallback(async () => {
@@ -298,7 +298,7 @@ export function VoiceBar() {
       try {
         const startedAt = performance.now()
         const transcript = stripSendPhrase(
-          (await stopAndTranscribe({ provider, modelId, cloudModel, apiKey })).trim(),
+          (await stopAndTranscribe({ provider, modelId, cloudModel })).trim(),
         )
         const transcribeMs = Math.round(performance.now() - startedAt)
         if (session !== sessionRef.current) {
@@ -331,7 +331,7 @@ export function VoiceBar() {
         setPhase('idle')
       }
     })()
-  }, [apiKey, cloudModel, modelId, provider, route, t])
+  }, [cloudModel, modelId, provider, route, t])
 
   const toggleRecording = useCallback(() => {
     if (recordingRef.current) transcribe()
@@ -359,15 +359,20 @@ export function VoiceBar() {
   }, [open, voiceEnabled, modelId, provider])
 
   useEffect(() => {
-    if (!open || !apiKey || !voiceEnabled) return
+    if (!open) return
+    void refreshOpenRouterKey().catch(() => undefined)
+  }, [open])
+
+  useEffect(() => {
+    if (!open || !hasKey || !voiceEnabled) return
     void listen()
-  }, [open, apiKey, voiceEnabled, listen])
+  }, [open, hasKey, voiceEnabled, listen])
 
   // Continuous listening: re-arm the mic after each command until the bar is closed.
   useEffect(() => {
     if (
       !open ||
-      !apiKey ||
+      !hasKey ||
       !voiceEnabled ||
       !keepListening ||
       message ||
@@ -382,7 +387,7 @@ export function VoiceBar() {
       void listen()
     }, 200)
     return () => window.clearInterval(id)
-  }, [open, apiKey, voiceEnabled, keepListening, message, plan, phase, listen])
+  }, [open, hasKey, voiceEnabled, keepListening, message, plan, phase, listen])
 
   useEffect(() => {
     if (phase !== 'listening') return
@@ -473,7 +478,7 @@ export function VoiceBar() {
   }, [open, close, runnable, confirm])
 
   useEffect(() => {
-    if (!open || !voiceEnabled || !apiKey) return
+    if (!open || !voiceEnabled || !hasKey) return
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'F9' || e.repeat) return
       e.preventDefault()
@@ -490,7 +495,7 @@ export function VoiceBar() {
       window.removeEventListener('keydown', onKeyDown, true)
       window.removeEventListener('keyup', onKeyUp, true)
     }
-  }, [open, voiceEnabled, apiKey, listen, transcribe])
+  }, [open, voiceEnabled, hasKey, listen, transcribe])
 
   useEffect(
     () => () => {
@@ -504,7 +509,7 @@ export function VoiceBar() {
 
   if (!open) return null
 
-  const ready = Boolean(apiKey) && voiceEnabled
+  const ready = hasKey && voiceEnabled
   const voiceLevel = Math.min(1, (levels[levels.length - 1] ?? 0) * 4)
 
   const hint = recording
@@ -515,7 +520,7 @@ export function VoiceBar() {
         ? t('bar.decidingHint')
         : runnable
           ? t('bar.runnableHint')
-          : !apiKey
+          : !hasKey
             ? t('bar.noKeyHint')
             : !voiceEnabled
               ? t('bar.enableVoiceHint')

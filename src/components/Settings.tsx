@@ -1,20 +1,11 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 
-import { host, useT } from '../host'
+import type { VoiceInputDevice } from '../alethe'
+import { useT } from '../host'
 import type { MessageKey } from '../messages/en'
+import { openVoiceSettings, useOpenRouterKey } from '../openRouterKey'
 import { CLOUD_MODELS, type CloudModel, updateSettings, useSettings } from '../settings'
-import {
-  SPEECH_DOWNLOAD_EVENT,
-  type SpeechDownloadProgress,
-  speechDeleteModel,
-  speechDownloadModel,
-  type SpeechInputDevice,
-  speechListInputDevices,
-  speechListModels,
-  type SpeechModelManifest,
-  type SpeechModelState,
-  speechModelStates,
-} from '../tauri'
+import { speechListInputDevices, speechModelStates } from '../tauri'
 import { MicSelect } from './MicSelect'
 import styles from './Settings.module.css'
 
@@ -27,9 +18,10 @@ function messageOf(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause)
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+const READY = 'ready'
+
+function openVoiceSettingsQuietly() {
+  void openVoiceSettings().catch(() => undefined)
 }
 
 type Choice<T extends string> = { value: T; label: string }
@@ -62,20 +54,18 @@ function Segmented<T extends string>({
   )
 }
 
-export function KeySetting() {
+export function OpenRouterKeySetting() {
   const t = useT()
-  const { apiKey } = useSettings()
+  const hasKey = useOpenRouterKey()
   return (
-    <input
-      className={styles.keyInput}
-      type="password"
-      autoComplete="off"
-      spellCheck={false}
-      aria-label={t('bar.keyInputLabel')}
-      placeholder={t('bar.keyPlaceholder')}
-      value={apiKey}
-      onChange={(event) => updateSettings({ apiKey: event.target.value })}
-    />
+    <div className={styles.fields}>
+      <p className={hasKey ? undefined : styles.warning}>
+        {hasKey ? t('settings.openRouterKeySet') : t('settings.openRouterKeyMissing')}
+      </p>
+      <button type="button" className={styles.action} onClick={openVoiceSettingsQuietly}>
+        {t('settings.openVoiceSettings')}
+      </button>
+    </div>
   )
 }
 
@@ -131,7 +121,7 @@ export function ModeSetting() {
 export function MicrophoneSetting() {
   const t = useT()
   const { voiceEnabled, microphoneId } = useSettings()
-  const [mics, setMics] = useState<SpeechInputDevice[]>([])
+  const [mics, setMics] = useState<VoiceInputDevice[]>([])
 
   useEffect(() => {
     let cancelled = false
@@ -200,110 +190,79 @@ function CloudModelSetting() {
 
 function LocalModelSetting() {
   const t = useT()
-  const { modelId } = useSettings()
-  const [models, setModels] = useState<SpeechModelManifest[]>([])
-  const [states, setStates] = useState<Record<string, SpeechModelState>>({})
-  const [fraction, setFraction] = useState<number | null>(null)
-  const [busy, setBusy] = useState(false)
+  const { voiceEnabled, modelId } = useSettings()
+  const [ready, setReady] = useState<string[] | null>(null)
   const [error, setError] = useState<string | null>(null)
-
-  const refreshStates = useCallback(async () => {
-    const next: Record<string, SpeechModelState> = {}
-    for (const state of await speechModelStates()) next[state.id] = state
-    setStates(next)
-  }, [])
 
   useEffect(() => {
     let cancelled = false
-    void (async () => {
-      try {
-        const catalog = await speechListModels()
+    speechModelStates()
+      .then((states) => {
         if (cancelled) return
-        setModels(catalog)
-        await refreshStates()
-      } catch (cause) {
+        setReady(
+          states
+            .filter((state) => state.status === READY && state.kind !== 'tts')
+            .map((state) => state.id),
+        )
+      })
+      .catch((cause) => {
         if (!cancelled) setError(messageOf(cause))
-      }
-    })()
+      })
     return () => {
       cancelled = true
     }
-  }, [refreshStates])
+  }, [])
 
-  useEffect(() => {
-    const subscription = host().listen<SpeechDownloadProgress>(
-      SPEECH_DOWNLOAD_EVENT,
-      (progress) => {
-        if (progress.modelId === modelId) setFraction(progress.fraction)
-      },
+  const manage = (
+    <button type="button" className={styles.action} onClick={openVoiceSettingsQuietly}>
+      {t('settings.manageModels')}
+    </button>
+  )
+
+  if (error) {
+    return (
+      <div className={styles.fields}>
+        <p className={styles.warning}>{error}</p>
+        {manage}
+      </div>
     )
-    return () => subscription.dispose()
-  }, [modelId])
-
-  const model = models.find((item) => item.id === modelId) ?? models[0]
-  const ready = model ? states[model.id]?.status === 'ready' : false
-
-  const download = async () => {
-    if (!model) return
-    setBusy(true)
-    setError(null)
-    setFraction(0)
-    try {
-      await speechDownloadModel(model.id)
-      updateSettings({ modelId: model.id })
-      await refreshStates()
-    } catch (cause) {
-      setError(messageOf(cause))
-    } finally {
-      setBusy(false)
-      setFraction(null)
-    }
   }
 
-  const remove = async () => {
-    if (!model) return
-    setBusy(true)
-    setError(null)
-    try {
-      await speechDeleteModel(model.id)
-      await refreshStates()
-    } catch (cause) {
-      setError(messageOf(cause))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  if (!model) {
+  if (!ready) {
     return (
       <div className={styles.fields}>
         <p>{t('settings.dictationModelLoading')}</p>
-        {error ? <p className={styles.warning}>{error}</p> : null}
       </div>
     )
   }
 
+  const chosenReady = ready.includes(modelId)
   return (
     <div className={styles.fields}>
-      <p>
-        <strong>{model.label}</strong>
-        {model.recommended ? ` · ${t('settings.dictationModelRecommended')}` : null}
-        {` · ${formatBytes(model.sizeBytes)}`}
-      </p>
-      <p>{model.description}</p>
-      <p>{ready ? t('settings.dictationModelReady') : t('settings.dictationModelMissing')}</p>
-      {fraction != null ? (
-        <p>{t('settings.dictationModelProgress', { percent: Math.round(fraction * 100) })}</p>
+      {ready.length > 0 ? (
+        <select
+          className={styles.modelSelect}
+          value={chosenReady ? modelId : ''}
+          disabled={!voiceEnabled}
+          aria-label={t('settings.dictationModel')}
+          onChange={(event) => updateSettings({ modelId: event.target.value })}
+        >
+          {chosenReady ? null : (
+            <option value="" disabled>
+              {modelId}
+            </option>
+          )}
+          {ready.map((id) => (
+            <option key={id} value={id}>
+              {id}
+            </option>
+          ))}
+        </select>
       ) : null}
-      <div className={styles.segmented}>
-        <button type="button" disabled={busy || ready} onClick={() => void download()}>
-          {t('settings.dictationModelDownload')}
-        </button>
-        <button type="button" disabled={busy || !ready} onClick={() => void remove()}>
-          {t('settings.dictationModelDelete')}
-        </button>
-      </div>
-      {error ? <p className={styles.warning}>{error}</p> : null}
+      {chosenReady ? null : (
+        <p className={styles.warning}>{t('settings.dictationModelMissing', { model: modelId })}</p>
+      )}
+      {manage}
     </div>
   )
 }

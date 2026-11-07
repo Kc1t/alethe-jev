@@ -1,8 +1,8 @@
 {
   "id": "alethe.jev",
   "name": "Jev",
-  "version": "1.0.0",
-  "apiVersion": 2,
+  "version": "1.1.0",
+  "apiVersion": 3,
   "kind": "ui",
   "description": "Voice commands for the workspace and Ctrl+E dictation into the focused terminal.",
   "entry": "main.js",
@@ -14,9 +14,8 @@
     "workspace.read",
     "workspace.control",
     "terminal.write",
-    "invoke:speech_*",
-    "invoke:jev_decide",
-    "listen:speech*"
+    "voice.listen",
+    "invoke:jev_decide"
   ],
   "activation": ["onStartupFinished"],
   "contributes": {

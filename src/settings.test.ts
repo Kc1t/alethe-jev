@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
 import type { PluginStorage } from './alethe'
-import { DEFAULT_SETTINGS, getSettings, loadSettings, normalizeSettings } from './settings'
+import {
+  DEFAULT_SETTINGS,
+  getSettings,
+  loadSettings,
+  normalizeSettings,
+  updateSettings,
+} from './settings'
 
 function memoryStorage(initial: Record<string, unknown>): PluginStorage & {
   record: Record<string, unknown>
@@ -81,5 +87,23 @@ describe('Jev settings', () => {
       dictationMode: 'toggle',
       modelId: DEFAULT_SETTINGS.modelId,
     })
+  })
+
+  it('writes a stored legacy key back unchanged when other settings change', async () => {
+    const storage = memoryStorage({ settings: { apiKey: 'sk-or-legacy', voiceEnabled: true } })
+    await loadSettings(storage)
+    updateSettings({ keepListening: true, provider: 'openrouter' })
+    expect(storage.record.settings).toMatchObject({
+      apiKey: 'sk-or-legacy',
+      keepListening: true,
+      provider: 'openrouter',
+    })
+  })
+
+  it('keeps a key the app already blanked blank', async () => {
+    const storage = memoryStorage({ settings: { apiKey: '', voiceEnabled: true } })
+    await loadSettings(storage)
+    updateSettings({ dictationMode: 'hold' })
+    expect((storage.record.settings as { apiKey: string }).apiKey).toBe('')
   })
 })

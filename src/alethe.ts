@@ -41,6 +41,55 @@ export type PluginWorkspace = {
   writeToTerminal: (terminalId: string, text: string) => Promise<void>
 }
 
+export type VoiceCloudProvider = 'openai' | 'elevenlabs' | 'gemini' | 'openrouter'
+export type VoiceSttProvider = 'local' | 'apple' | VoiceCloudProvider
+export type VoiceInputDevice = { deviceId: string; label: string; isDefault: boolean }
+export type VoiceModelState = {
+  id: string
+  status: string
+  progress: number | null
+  error: string | null
+  downloadedBytes: number | null
+  totalBytes: number | null
+  kind?: 'stt' | 'tts'
+}
+export type VoiceCapturedAudio = { samples: number[]; sampleRate: number; peak: number }
+export type VoiceVadStatus = {
+  level: number
+  voice: boolean
+  heardMs: number
+  silenceMs: number
+  segments: number
+}
+export type VoiceTranscriptionOptions = { modelId: string; locale?: string }
+export type VoicePrepareOptions = VoiceTranscriptionOptions & { provider?: VoiceSttProvider }
+export type VoiceTranscribeOptions = VoicePrepareOptions & {
+  fallbackLocale?: string
+  usage?: string
+}
+export type VoiceProviderCatalog = {
+  provider: VoiceCloudProvider
+  keyUrl: string
+  models: { id: string; label: string; capability: 'stt' | 'tts' }[]
+  voices: { id: string; label: string }[]
+  hasKey: boolean
+}
+
+export type PluginVoice = {
+  inputDevices: () => Promise<VoiceInputDevice[]>
+  modelStates: (locale?: string) => Promise<VoiceModelState[]>
+  prepare: (options: VoicePrepareOptions) => Promise<boolean>
+  startCapture: (deviceId?: string) => Promise<void>
+  captureLevel: () => Promise<number>
+  vadStatus: () => Promise<VoiceVadStatus | null>
+  prepareVad: () => Promise<boolean>
+  stopCapture: () => Promise<VoiceCapturedAudio>
+  stopAndTranscribe: (options: VoiceTranscribeOptions) => Promise<string>
+  transcribePartial: (options: VoiceTranscriptionOptions) => Promise<string>
+  providers: () => Promise<VoiceProviderCatalog[]>
+  openSettings: () => void
+}
+
 export type PluginStorage = {
   read: () => Promise<Record<string, unknown>>
   get: <T>(key: string, fallback: T) => Promise<T>
@@ -82,6 +131,7 @@ export type PluginContext = {
   invoke: <T>(command: string, args?: Record<string, unknown>) => Promise<T>
   listen: <T>(event: string, handler: (payload: T) => void) => Disposable
   readonly storage: PluginStorage
+  readonly voice: PluginVoice
 }
 
 export type PluginModule = {

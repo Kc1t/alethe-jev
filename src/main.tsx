@@ -2,10 +2,10 @@ import type { PluginContext } from './alethe'
 import { Dictation } from './components/Dictation'
 import { History } from './components/History'
 import {
-  KeySetting,
   MicrophoneSetting,
   ModelSetting,
   ModeSetting,
+  OpenRouterKeySetting,
   TranscriberSetting,
   VoiceSetting,
 } from './components/Settings'
@@ -15,11 +15,13 @@ import { bindHost } from './host'
 import { en } from './messages/en'
 import { ptBR } from './messages/pt-BR'
 import { zhCN } from './messages/zh-CN'
+import { resetOpenRouterKey } from './openRouterKey'
 import { formatShortcut } from './platform'
 import { getSettings, loadSettings } from './settings'
 
 const PLUGIN_ID = 'alethe.jev'
 const HISTORY_VIEW_ID = 'jev'
+const VOICE_API_MISSING = 'Jev needs an Alethe build whose plugin API 3 provides context.voice.'
 
 function contributeSettings(context: PluginContext) {
   const shortcut = () => formatShortcut('Ctrl+E')
@@ -27,10 +29,10 @@ function contributeSettings(context: PluginContext) {
   const sections = [
     {
       id: 'jev.key',
-      title: () => t('bar.keyInputLabel'),
-      description: () => t('bar.keySettingsDesc'),
+      title: () => t('settings.openRouterKey'),
+      description: () => t('settings.openRouterKeyDesc'),
       keywords: 'jev voice command api key openrouter decisions chave comando voz',
-      component: KeySetting,
+      component: OpenRouterKeySetting,
     },
     {
       id: 'jev.voice',
@@ -70,7 +72,7 @@ function contributeSettings(context: PluginContext) {
         getSettings().provider === 'openrouter'
           ? t('settings.dictationCloudModelDesc')
           : t('settings.dictationModelDesc'),
-      keywords: 'model modelo parakeet gpt audio gemini download',
+      keywords: 'model modelo parakeet gpt audio gemini download manage gerenciar',
       component: ModelSetting,
     },
   ]
@@ -78,6 +80,7 @@ function contributeSettings(context: PluginContext) {
 }
 
 async function activate(context: PluginContext) {
+  if (!context.voice) throw new Error(VOICE_API_MISSING)
   bindHost(context)
   context.registerMessages('en', en)
   context.registerMessages('pt-BR', ptBR)
@@ -93,6 +96,7 @@ async function activate(context: PluginContext) {
 // The host removes every overlay, view and setting after this returns, so nothing else is undone here.
 function deactivate() {
   history.clear()
+  resetOpenRouterKey()
 }
 
 window.alethe?.registerPlugin(PLUGIN_ID, { activate, deactivate })

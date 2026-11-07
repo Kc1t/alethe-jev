@@ -8,6 +8,7 @@ export type CloudModel = (typeof CLOUD_MODELS)[number]
 export const DEFAULT_MODEL_ID = 'parakeet-tdt-0.6b-v3-int8'
 
 export type JevSettings = {
+  // Never used: the app moves this legacy key into the keychain and blanks it
   apiKey: string
   keepListening: boolean
   // Gates the microphone for both the command bar and dictation
